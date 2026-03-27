@@ -10,11 +10,15 @@ use std::io::BufReader;
 use std::path::Path;
 use svg::Document;
 
+use std::io::{self, Read};
+
 #[derive(Parser)]
 pub struct MainCli {
+    #[arg(long, default_value = "both")]
+    pub output_mode: String, // file | stdout | both
     /// Path to input file (mandatory)
     #[arg(short = 'i', long, help = "Path to the input JSON file, or a solution JSON file for warm starting")]
-    pub input: String,
+    pub input: Option<String>,
 
     /// Global time limit in seconds (mutually exclusive with -e and -c)
     #[arg(short = 't', long, conflicts_with_all = &["exploration", "compression"], help = "Set a global time limit (in seconds)")]
@@ -70,7 +74,7 @@ pub fn init_logger(level_filter: LevelFilter, log_file_path: &Path) -> Result<()
         })
         // Add blanket level filter -
         .level(level_filter)
-        .chain(std::io::stdout())
+        .chain(std::io::stderr())
         .chain(fern::log_file(log_file_path)?)
         .apply()?;
     log!(
@@ -125,4 +129,14 @@ pub fn read_spp_input(path: &Path) -> Result<(ExtSPInstance, Option<ExtSPSolutio
             Ok((ext_instance, None))
         }
     }
+}
+
+pub fn read_spp_input_from_stdin() -> Result<(ExtSPInstance, Option<ExtSPSolution>)> {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+    if let Ok(ext_output) = serde_json::from_str::<ExtSPOutput>(&input) {
+        return Ok((ext_output.instance, Some(ext_output.solution)));
+    }
+    let ext_instance = serde_json::from_str::<ExtSPInstance>(&input)?;
+    Ok((ext_instance, None))
 }

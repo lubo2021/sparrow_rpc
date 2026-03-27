@@ -1,5 +1,4 @@
 extern crate core;
-
 use clap::Parser as Clap;
 use jagua_rs::io::import::Importer;
 use log::{info, warn, Level};
@@ -23,6 +22,12 @@ pub const OUTPUT_DIR: &str = "output";
 
 pub const LIVE_DIR: &str = "data/live";
 
+enum OutputMode {
+    FileOnly,      // 只输出文件
+    StdoutOnly,    // 只输出给 C++
+    Both,          // 文件 + stdout
+}
+
 fn main() -> Result<()>{
     let mut config = DEFAULT_SPARROW_CONFIG;
 
@@ -34,7 +39,7 @@ fn main() -> Result<()>{
     }
 
     let args = MainCli::parse();
-    let input_file_path = &args.input;
+    //let input_file_path = &args.input;
     let (explore_dur, compress_dur) = match (args.global_time, args.exploration, args.compression) {
         (Some(gt), None, None) => {
             (Duration::from_secs(gt).mul_f32(DEFAULT_EXPLORE_TIME_RATIO), Duration::from_secs(gt).mul_f32(DEFAULT_COMPRESS_TIME_RATIO))
@@ -75,7 +80,14 @@ fn main() -> Result<()>{
 
     info!("[MAIN] system time: {}", jiff::Timestamp::now());
 
-    let (ext_instance, ext_solution) = io::read_spp_input(Path::new(&input_file_path))?;
+    //let (ext_instance, ext_solution) = io::read_spp_input(Path::new(&input_file_path))?;
+    
+    let input = args.input.as_deref().unwrap_or("-");
+    let (ext_instance, ext_solution) = if input == "-" {
+        io::read_spp_input_from_stdin()?
+    } else {
+        io::read_spp_input(Path::new(&input))?
+    };
 
     let importer = Importer::new(config.cde_config, config.poly_simpl_tolerance, config.min_item_separation, config.narrow_concavity_cutoff_ratio);
     let instance = jagua_rs::probs::spp::io::import_instance(&importer, &ext_instance)?;
@@ -85,26 +97,60 @@ fn main() -> Result<()>{
     );
 
     info!("[MAIN] loaded instance {} with #{} items", ext_instance.name, instance.total_item_qty());
-    
-    let mut svg_exporter = {
-        let final_svg_path = Some(format!("{OUTPUT_DIR}/final_{}.svg", ext_instance.name));
-
-        let intermediate_svg_dir = match cfg!(feature = "only_final_svg") {
-            true => None,
-            false => Some(format!("{OUTPUT_DIR}/sols_{}", ext_instance.name))
-        };
-
-        let live_svg_path = match cfg!(feature = "live_svg") {
-            true => Some(format!("{LIVE_DIR}/.live_solution.svg")),
-            false => None
-        };
-        
-        SvgExporter::new(
-            final_svg_path,
-            intermediate_svg_dir,
-            live_svg_path
-        )
+    let output_mode = match args.output_mode.as_str() {
+        "file" => OutputMode::FileOnly,
+        "stdout" => OutputMode::StdoutOnly,
+        _ => OutputMode::Both,
     };
+    
+    let final_svg_path = match output_mode {
+        OutputMode::StdoutOnly => None,
+        _ =>  Some(format!("{OUTPUT_DIR}/final_{}.svg", ext_instance.name)),
+    };
+
+    let intermediate_svg_dir = if cfg!(feature = "only_final_svg") {
+        None
+    } else {
+        match output_mode {
+            OutputMode::StdoutOnly => None, //  禁止文件输出
+            _ => Some(format!("{OUTPUT_DIR}/sols_{}", ext_instance.name)),
+        }
+    };
+
+ let live_svg_path = if cfg!(feature = "live_svg") {
+    match output_mode {
+        OutputMode::StdoutOnly => None, //  不写文件
+        _ => Some(format!("{LIVE_DIR}/.live_solution.svg")),
+    }
+} else {
+    None
+};
+
+    let mut svg_exporter = SvgExporter::new(
+        final_svg_path,
+        intermediate_svg_dir,
+        live_svg_path
+    );
+    if matches!(output_mode, OutputMode::StdoutOnly | OutputMode::Both) {
+        svg_exporter = svg_exporter.with_emitter(|event| {
+            use std::io::{self, Write};
+
+            let mut stdout = io::stdout();
+            let json = serde_json::to_string(&event).unwrap();
+
+            writeln!(stdout, "{}", json).unwrap();
+            stdout.flush().unwrap();
+        });
+    }
+    /*.with_emitter(|event| {
+        use std::io::{self, Write};
+
+        let mut stdout = io::stdout();
+        let json = serde_json::to_string(&event).unwrap();
+
+        writeln!(stdout, "{}", json).unwrap();
+        stdout.flush().unwrap();
+    });*/
     
     let mut ctrlc_terminator = CtrlCTerminator::new();
 
@@ -123,7 +169,14 @@ fn main() -> Result<()>{
         instance: ext_instance,
         solution: jagua_rs::probs::spp::io::export(&instance, &solution, *EPOCH)
     };
-    io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
-
+    //io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
+    match output_mode {
+        OutputMode::FileOnly | OutputMode::Both => {
+            io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
+        }
+        OutputMode::StdoutOnly => {
+            println!("{}", serde_json::to_string(&json_output)?);
+        }
+    }
     Ok(())
 }

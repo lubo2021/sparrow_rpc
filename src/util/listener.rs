@@ -1,7 +1,7 @@
 use jagua_rs::probs::spp::entities::{SPInstance, SPSolution};
 
 /// Trait for listeners that can receive solutions during the optimization process
-pub trait SolutionListener {
+pub trait SolutionListener: Send + Sync {
     fn report(&mut self, report: ReportType, solution: &SPSolution, instance: &SPInstance);
 }
 

@@ -4,7 +4,27 @@ use crate::util::listener::{ReportType, SolutionListener};
 use jagua_rs::io::svg::s_layout_to_svg;
 use jagua_rs::probs::spp::entities::{SPInstance, SPSolution};
 use log::Level;
+use numfmt::Numeric;
 use std::path::Path;
+use base64::{engine::general_purpose, Engine as _};
+
+
+
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub enum SolverEvent {
+    Svg {
+        name: String,
+        content: String,
+    },
+    Progress {
+        step: usize,
+        strip_width: f64,
+        kind: String,
+    },
+}
+
 pub struct SvgExporter {
     svg_counter: usize,
     /// Path to write the final SVG file to, if provided
@@ -13,6 +33,7 @@ pub struct SvgExporter {
     pub intermediate_dir: Option<String>,
     /// Path to write the live SVG file to, if provided
     pub live_path: Option<String>,
+    pub emitter: Option<Box<dyn Fn(SolverEvent) + Send + Sync+ 'static>>,
 }
 
 impl SvgExporter {
@@ -32,11 +53,19 @@ impl SvgExporter {
             final_path,
             intermediate_dir,
             live_path,
+            emitter: None,
         }
+    }
+    pub fn with_emitter<F>(mut self, f: F) -> Self
+    where
+        F: Fn(SolverEvent) + Send + Sync + 'static,
+    {
+        self.emitter = Some(Box::new(f));
+        self
     }
 }
 
-impl SolutionListener for SvgExporter{
+impl crate::util::listener::SolutionListener for SvgExporter{
     fn report(&mut self, report_type: ReportType, solution: &SPSolution, instance: &SPInstance) {
         let suffix = match report_type {
             ReportType::CmprFeas => "cmpr",
@@ -61,5 +90,22 @@ impl SolutionListener for SvgExporter{
             let svg = s_layout_to_svg(&solution.layout_snapshot, instance, DRAW_OPTIONS, stem.to_str().unwrap());
             io::write_svg(&svg, Path::new(final_path), Level::Info).expect("failed to write final svg");
         }
+        
+        if let Some(emitter) = &self.emitter {
+            let svg = s_layout_to_svg(&solution.layout_snapshot, instance, DRAW_OPTIONS, file_name.as_str()).to_string();
+
+            emitter(SolverEvent::Svg {
+                name: file_name.clone(),
+                content: general_purpose::STANDARD.encode(svg),
+            });
+        }
+        if let Some(emitter) = &self.emitter {
+            emitter(SolverEvent::Progress {
+                step: self.svg_counter,
+                strip_width: solution.strip_width().to_f64(),
+                kind: format!("{:?}", report_type),
+            });
+        }
     }
 }
+
