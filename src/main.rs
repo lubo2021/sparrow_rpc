@@ -17,7 +17,8 @@ use rand::rngs::Xoshiro256PlusPlus;
 use sparrow::consts::{DEFAULT_COMPRESS_TIME_RATIO, DEFAULT_EXPLORE_TIME_RATIO, DEFAULT_FAIL_DECAY_RATIO_CMPR, DEFAULT_MAX_CONSEQ_FAILS_EXPL, LOG_LEVEL_FILTER_DEBUG, LOG_LEVEL_FILTER_RELEASE};
 use sparrow::util::ctrlc_terminator::CtrlCTerminator;
 use sparrow::util::svg_exporter::SvgExporter;
-
+use sparrow::util::svg_exporter::SolverEvent;
+use base64::{engine::general_purpose, Engine as _};
 pub const OUTPUT_DIR: &str = "output";
 
 pub const LIVE_DIR: &str = "data/live";
@@ -175,7 +176,12 @@ fn main() -> Result<()>{
             io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
         }
         OutputMode::StdoutOnly => {
-            println!("{}", serde_json::to_string(&json_output)?);
+            let json_str = serde_json::to_string(&json_output)?;
+            if let Some(emitter) = svg_exporter.emitter.as_ref() {
+                emitter(SolverEvent::FinalResult {
+                    data: general_purpose::STANDARD.encode(json_str),
+                });
+            }
         }
     }
     Ok(())

@@ -8,7 +8,7 @@ use numfmt::Numeric;
 use std::path::Path;
 use base64::{engine::general_purpose, Engine as _};
 
-
+use crate::util::io::ExtSPOutput;
 
 use serde::Serialize;
 
@@ -22,6 +22,9 @@ pub enum SolverEvent {
         step: usize,
         strip_width: f64,
         kind: String,
+    },
+   FinalResult {
+        data: String,  
     },
 }
 
@@ -83,7 +86,6 @@ impl crate::util::listener::SolutionListener for SvgExporter{
             let svg = s_layout_to_svg(&solution.layout_snapshot, instance, DRAW_OPTIONS, file_name.as_str());
             let file_path = &*format!("{intermediate_dir}/{file_name}.svg");
             io::write_svg(&svg, Path::new(file_path), Level::Trace).expect("failed to write intermediate svg");
-            self.svg_counter += 1;
         }
         if let Some(final_path) = &self.final_path && report_type == ReportType::Final {
             let stem = Path::new(final_path).file_stem().unwrap();
@@ -99,7 +101,9 @@ impl crate::util::listener::SolutionListener for SvgExporter{
                 content: general_purpose::STANDARD.encode(svg),
             });
         }
+        self.svg_counter += 1;
         if let Some(emitter) = &self.emitter {
+
             emitter(SolverEvent::Progress {
                 step: self.svg_counter,
                 strip_width: solution.strip_width().to_f64(),
