@@ -61,6 +61,65 @@ fn main() -> Result<()>{
         config.cmpr_cfg.shrink_decay = ShrinkDecayStrategy::FailureBased(DEFAULT_FAIL_DECAY_RATIO_CMPR);
         warn!("[MAIN] early termination enabled!");
     }
+    // 应用采样参数
+    if let Some(n) = args.container_samples {
+        config.expl_cfg.separator_config.sample_config.n_container_samples = n;
+        config.cmpr_cfg.separator_config.sample_config.n_container_samples = n;
+    }
+    if let Some(n) = args.focused_samples {
+        config.expl_cfg.separator_config.sample_config.n_focussed_samples = n;
+        config.cmpr_cfg.separator_config.sample_config.n_focussed_samples = n;
+    }
+    if let Some(n) = args.coord_descents {
+        config.expl_cfg.separator_config.sample_config.n_coord_descents = n;
+        config.cmpr_cfg.separator_config.sample_config.n_coord_descents = n;
+    }
+
+    // 应用分离器参数
+    if let Some(n) = args.iter_no_improve {
+        config.expl_cfg.separator_config.iter_no_imprv_limit = n;
+        config.cmpr_cfg.separator_config.iter_no_imprv_limit = n / 2; // 压缩阶段可减半
+    }
+    if let Some(n) = args.strike_limit {
+        config.expl_cfg.separator_config.strike_limit = n;
+        config.cmpr_cfg.separator_config.strike_limit = n + 2; // 压缩阶段可更宽松
+    }
+    if let Some(n) = args.workers {
+        config.expl_cfg.separator_config.n_workers = n;
+        config.cmpr_cfg.separator_config.n_workers = n;
+    }
+
+    // 应用探索阶段参数
+    if let Some(v) = args.shrink_step {
+        config.expl_cfg.shrink_step = v;
+    }
+    if let Some(v) = args.pool_stddev {
+        config.expl_cfg.solution_pool_distribution_stddev = v;
+    }
+
+    // 应用压缩阶段参数
+    if let (Some(min), Some(max)) = (args.shrink_min, args.shrink_max) {
+        config.cmpr_cfg.shrink_range = (min, max);
+    }
+    // ===== CDE 配置 =====
+    if let Some(d) = args.quadtree_depth {
+        config.cde_config.quadtree_depth = d;
+    }
+    if let Some(t) = args.cd_threshold {
+        config.cde_config.cd_threshold = t;
+    }
+
+    // ===== 几何处理配置 =====
+    if let Some(v) = args.poly_simpl_tolerance {
+        config.poly_simpl_tolerance = Some(v);
+    }
+    if let Some(v) = args.item_separation {
+        config.min_item_separation = Some(v);
+    }
+    if let (Some(dist), Some(area)) = (args.concavity_dist, args.concavity_area) {
+        config.narrow_concavity_cutoff_ratio = Some((dist, area));
+    }
+    // ===== RNG 种子 =====
     if let Some(arg_rng_seed) = args.rng_seed {
         config.rng_seed = Some(arg_rng_seed as usize);
     }

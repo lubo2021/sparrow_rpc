@@ -38,6 +38,59 @@ pub struct MainCli {
 
     #[arg(short = 's', long, help = "Fixed seed for the random number generator")]
     pub rng_seed: Option<u64>,
+
+    // ===== 新增采样参数 =====
+    #[arg(long, help = "Number of container-wide samples per placement")]
+    pub container_samples: Option<usize>,
+    
+    #[arg(long, help = "Number of focused samples around reference placement")]
+    pub focused_samples: Option<usize>,
+    
+    #[arg(long, help = "Number of coordinate descents to perform")]
+    pub coord_descents: Option<usize>,
+ 
+    // ===== 新增分离器参数 =====
+    #[arg(long, help = "Max iterations without improvement per strike")]
+    pub iter_no_improve: Option<usize>,
+    
+    #[arg(long, help = "Strike limit for separator")]
+    pub strike_limit: Option<usize>,
+    
+    #[arg(long, help = "Number of worker threads")]
+    pub workers: Option<usize>,
+ 
+    // ===== 新增探索阶段参数 =====
+    #[arg(long, help = "Shrink step for exploration")]
+    pub shrink_step: Option<f32>,
+    
+    #[arg(long, help = "Solution pool distribution stddev")]
+    pub pool_stddev: Option<f32>,
+ 
+    // ===== 新增压缩阶段参数 =====
+    #[arg(long, help = "Shrink range min for compression")]
+    pub shrink_min: Option<f32>,
+    
+    #[arg(long, help = "Shrink range max for compression")]
+    pub shrink_max: Option<f32>,
+
+    // ===== CDE 碰撞检测配置 =====
+    #[arg(long, help = "Quadtree depth for collision detection")]
+    pub quadtree_depth: Option<u8>,     
+    
+    #[arg(long, help = "Collision detection threshold")]
+    pub cd_threshold: Option<u8>,       
+    // ===== 几何处理配置 =====
+    #[arg(long, help = "Polygon simplification tolerance (disabled if not set)")]
+    pub poly_simpl_tolerance: Option<f32>,
+    
+    #[arg(long, help = "Minimum distance between items and hazards")]
+    pub item_separation: Option<f32>,
+    
+    #[arg(long, help = "Narrow concavity cutoff distance")]
+    pub concavity_dist: Option<f32>,
+    
+    #[arg(long, help = "Narrow concavity cutoff area ratio")]
+    pub concavity_area: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
