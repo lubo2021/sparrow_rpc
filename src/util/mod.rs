@@ -8,3 +8,9 @@ pub mod terminator;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod ctrlc_terminator;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ipc_terminator;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod combined_terminator;

@@ -15,7 +15,7 @@ use std::time::Duration;
 use anyhow::{bail, Result};
 use rand::rngs::Xoshiro256PlusPlus;
 use sparrow::consts::{DEFAULT_COMPRESS_TIME_RATIO, DEFAULT_EXPLORE_TIME_RATIO, DEFAULT_FAIL_DECAY_RATIO_CMPR, DEFAULT_MAX_CONSEQ_FAILS_EXPL, LOG_LEVEL_FILTER_DEBUG, LOG_LEVEL_FILTER_RELEASE};
-use sparrow::util::ctrlc_terminator::CtrlCTerminator;
+use sparrow::util::combined_terminator::CombinedTerminator;
 use sparrow::util::svg_exporter::SvgExporter;
 use sparrow::util::svg_exporter::SolverEvent;
 use base64::{engine::general_purpose, Engine as _};
@@ -212,13 +212,16 @@ fn main() -> Result<()>{
         stdout.flush().unwrap();
     });*/
     
-    let mut ctrlc_terminator = CtrlCTerminator::new();
+    // Create terminators for graceful shutdown
+    let mut terminator = CombinedTerminator::new();
+    info!("[MAIN] IPC control file: {}", terminator.ipc.control_file());
+    info!("[MAIN] Working directory: {}", std::env::current_dir()?.display());
 
     let solution = optimize(
         instance.clone(),
         rng,
         &mut svg_exporter,
-        &mut ctrlc_terminator,
+        &mut terminator,
         &config.expl_cfg,
         &config.cmpr_cfg,
         initial_solution.as_ref()
@@ -229,7 +232,8 @@ fn main() -> Result<()>{
         instance: ext_instance,
         solution: jagua_rs::probs::spp::io::export(&instance, &solution, *EPOCH)
     };
-    //io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
+
+    // 1. First send FinalResult (data comes first)
     match output_mode {
         OutputMode::FileOnly | OutputMode::Both => {
             io::write_json(&json_output, Path::new(json_path.as_str()), Level::Info)?;
@@ -243,5 +247,16 @@ fn main() -> Result<()>{
             }
         }
     }
+
+    // 2. Then send GracefulShutdown status (if applicable)
+    if let Some(reason) = terminator.shutdown_reason() {
+        info!("Graceful shutdown triggered: {}, sending notification...", reason);
+        if let Some(emitter) = svg_exporter.emitter.as_ref() {
+            emitter(SolverEvent::GracefulShutdown {
+                reason: reason.to_string(),
+            });
+        }
+    }
+
     Ok(())
 }

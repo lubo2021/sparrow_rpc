@@ -23,7 +23,11 @@ pub enum SolverEvent {
         strip_width: f64,
         kind: String,
     },
-   FinalResult {
+    /// Sent when graceful shutdown is requested by C++
+    GracefulShutdown {
+        reason: String,
+    },
+    FinalResult {
         data: String,  
     },
 }
